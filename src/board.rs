@@ -1,6 +1,6 @@
 use std::fmt;
 
-pub const BOARD_SIZE: usize = 31;
+pub const BOARD_SIZE: usize = 15;
 pub const BOARD_OFFSET: i32 = (BOARD_SIZE / 2) as i32; 
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -27,7 +27,7 @@ impl fmt::Display for CellState {
 
 #[derive(Clone, Copy, Debug)]
 pub struct Board {
-    cells: [CellState; BOARD_SIZE * BOARD_SIZE],
+    pub cells: [CellState; BOARD_SIZE * BOARD_SIZE],
     pub n_pieces: usize,
 }
 

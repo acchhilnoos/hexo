@@ -1,7 +1,10 @@
-use crate::board::Board;
+use std::collections::VecDeque;
+
+use crate::board::{Board, CellState, BOARD_SIZE};
+use crate::network::{Matrix, Network};
 use rand::Rng;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum GameState {
     Win,
     Loss,
@@ -11,30 +14,37 @@ enum GameState {
 
 #[derive(Clone, Debug)]
 struct Node {
+    // parent of root is None
     parent: Option<usize>,
+    // indices of child nodes in enclosing tree
     children: Vec<usize>,
 
+    // number of evaluations in subtree rooted at self
     n: usize,
+    // sum of evaluations in subtree rooted at self
     v: f32,
+    // probability self.a is chosen at parent
     p: f32,
 
+    // a of root is None
     a: Option<(i32, i32)>,
-    t: bool,
+    s: GameState,
 }
 
 pub struct Tree {
     nodes: Vec<Node>,
+    // exploration factor
     c: f32,
 }
 
 impl Node {
-    fn ucb1(&self, c: f32, n_parent: usize) -> f32 {
+    fn ucb1(&self, c: f32, parent_n: usize) -> f32 {
         if self.n == 0 {
             return f32::INFINITY;
         }
 
         let q = self.v / self.n as f32;
-        let u = c * self.p * (n_parent as f32).sqrt() / (1.0 + self.n as f32);
+        let u = c * self.p * (parent_n as f32).sqrt() / (1.0 + self.n as f32);
 
         q + u
     }
@@ -50,17 +60,26 @@ impl Tree {
                 v: 0.0,
                 p: 0.0,
                 a: None,
-                t: false,
+                s: GameState::Incomplete,
             }],
-            c: c,
+            c,
         }
     }
 
-    fn select(&self, root_idx: usize, mut root_board: Board) -> (usize, Board) {
+    // find the index and corresponding state of a leaf node
+    fn select(&self, root_idx: usize, mut board: Board) -> (usize, Board) {
         let mut parent_idx = root_idx;
 
         while !self.nodes[parent_idx].children.is_empty() {
             let parent = &self.nodes[parent_idx];
+            let player = board.next_player();
+
+            // NOTE:
+            // let max_child_idx = parent
+            //     .children
+            //     .iter()
+            //     .max_by_key(|&&c| self.nodes[c].ucb1(self.c, parent.n));
+            // doesn't work because comparison isn't defined on f32::NAN
 
             let mut max_child_v = f32::NEG_INFINITY;
             let mut max_child_idx = 0;
@@ -72,61 +91,59 @@ impl Tree {
                     max_child_idx = child_idx;
                 }
             }
-            parent_idx = max_child_idx;
 
-            let player = root_board.next_player();
+            parent_idx = max_child_idx;
             let a = self.nodes[parent_idx]
                 .a
                 .expect("Tree::select() state found without action");
-            root_board.set(a.0, a.1, player);
+            board.set(a.0, a.1, player);
         }
 
-        (parent_idx, root_board)
+        (parent_idx, board)
     }
 
-    fn expand(&mut self, leaf_idx: usize, leaf_board: Board) -> GameState {
+    // create child nodes of self.nodes[leaf_idx] if not terminal else assign state
+    fn expand(&mut self, leaf_idx: usize, leaf_board: Board) {
         if let Some((x, y)) = self.nodes[leaf_idx].a {
             let parent_player = {
                 let mut temp = leaf_board;
                 temp.n_pieces -= 1;
                 temp.next_player()
             };
-            if leaf_board.check_win(x, y, parent_player) {
-                self.nodes[leaf_idx].t = true;
 
-                return if parent_player == leaf_board.next_player() {
+            if leaf_board.check_win(x, y, parent_player) {
+                self.nodes[leaf_idx].s = if parent_player == leaf_board.next_player() {
                     GameState::Win
                 } else {
                     GameState::Loss
-                };
+                }
+            }
+        } else {
+            let actions = leaf_board.legal();
+
+            if actions.is_empty() {
+                self.nodes[leaf_idx].s = GameState::Draw;
+            } else {
+                let p = 1.0 / actions.len() as f32;
+
+                for action in actions {
+                    let child_idx = self.nodes.len();
+                    self.nodes.push(Node {
+                        parent: Some(leaf_idx),
+                        children: Vec::new(),
+                        n: 0,
+                        v: 0.0,
+                        p,
+                        a: Some(action),
+                        s: GameState::Incomplete,
+                    });
+                    self.nodes[leaf_idx].children.push(child_idx);
+                }
             }
         }
-
-        let actions = leaf_board.legal();
-        if actions.is_empty() {
-            self.nodes[leaf_idx].t = true;
-            return GameState::Draw;
-        }
-
-        let p = 1.0 / actions.len() as f32;
-
-        for action in actions {
-            let child_idx = self.nodes.len();
-            self.nodes.push(Node {
-                parent: Some(leaf_idx),
-                children: Vec::new(),
-                n: 0,
-                v: 0.0,
-                p,
-                a: Some(action),
-                t: false,
-            });
-            self.nodes[leaf_idx].children.push(child_idx);
-        }
-
-        GameState::Incomplete
     }
 
+    // determine final game state after random rollout from leaf_board
     fn simulate(&self, mut leaf_board: Board) -> GameState {
         let leaf_player = leaf_board.next_player();
         let mut rng = rand::thread_rng();
@@ -157,6 +174,7 @@ impl Tree {
         GameState::Draw
     }
 
+    // update ancestors of self.nodes[child_idx]
     fn backpropagate(&mut self, mut child_idx: usize, mut board: Board, mut v: f32) {
         loop {
             let node = &mut self.nodes[child_idx];
@@ -178,11 +196,12 @@ impl Tree {
         }
     }
 
-    pub fn search(&mut self, iterations: usize, root_board: Board) -> (i32, i32) {
+    pub fn search(&mut self, iterations: usize, root_board: Board) -> (i32, i32, usize) {
         for _ in 0..iterations {
             let (leaf_idx, leaf_board) = self.select(0, root_board);
+            self.expand(leaf_idx, leaf_board);
 
-            let v = match self.expand(leaf_idx, leaf_board) {
+            let v = match self.nodes[leaf_idx].s {
                 GameState::Win => 1.0,
                 GameState::Loss => -1.0,
                 GameState::Draw => 0.0,
@@ -203,9 +222,30 @@ impl Tree {
             .max_by_key(|&&child_idx| self.nodes[child_idx].n)
             .expect("Tree::search() root is terminal");
 
-        self.nodes[max_child_idx]
+        let max_a = &self.nodes[max_child_idx]
             .a
-            .expect("Tree::search() state found without action")
+            .expect("Tree::search() state found without action");
+
+        (max_a.0, max_a.1, max_child_idx)
+    }
+
+    pub fn jump(&mut self, idx: usize) {
+        let mut subtree = vec![self.nodes[idx].clone()];
+        let mut q: VecDeque<usize> = VecDeque::new();
+        for &i in self.nodes[idx].children.iter() {
+            q.push_back(i);
+        }
+        loop {
+            if let Some(i) = q.pop_front() {
+                subtree.push(self.nodes[i].clone());
+                for &j in &self.nodes[i].children {
+                    q.push_back(j);
+                }
+            } else {
+                break;
+            }
+        }
+        self.nodes = subtree;
     }
 
     pub fn peek(&self) {
@@ -246,9 +286,9 @@ mod tests {
         let (root_idx, root_board) = tree.select(0, board);
         assert_eq!(root_idx, 0);
 
-        let expanded = tree.expand(root_idx, root_board);
-        assert_eq!(expanded, GameState::Incomplete);
-        assert_eq!(tree.nodes[0].children.len(), 225);
+        tree.expand(root_idx, root_board);
+        assert_eq!(tree.nodes[root_idx].s, GameState::Incomplete);
+        assert_eq!(tree.nodes[0].children.len(), 961);
 
         tree.backpropagate(root_idx, root_board, -1.0);
         assert_eq!(tree.nodes[0].n, 1);

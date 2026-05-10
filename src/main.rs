@@ -2,30 +2,34 @@ mod board;
 use board::{Board, CellState};
 mod mcts;
 use mcts::Tree;
+mod network;
+use network::Network;
 
 fn main() {
     let mut board = Board::new();
-    let mut current_player = CellState::X;
+    let network = Network::new(225, 128, 128, 1, 1, 1);
+    let mut player = CellState::X;
+    let mut tree = Tree::new(1.414);
     let mut turn = 1;
     println!("{}", board);
     loop {
-        println!("\nTurn {}: Player {}", turn, current_player);
-        let mut mcts = Tree::new(1.414);
-        let best = mcts.search(500000, board);
-        mcts.peek();
-        board.set(best.0, best.1, current_player);
-        println!("Player {} at ({}, {})", current_player, best.0, best.1);
+        println!("\nTurn {}: Player {}", turn, player);
+        let best = tree.search(10000, board);
+        tree.peek();
+        board.set(best.0, best.1, player);
+        tree.jump(best.2);
+        println!("Player {} at ({}, {})", player, best.0, best.1);
         println!("{}", board);
-        if board.check_win(best.0, best.1, current_player) {
-            println!("\nplayer {} win", current_player);
+        if board.check_win(best.0, best.1, player) {
+            println!("\nplayer {} win", player);
             break;
         }
         if board.legal().is_empty() {
             println!("\ndraw");
             break;
         }
-        current_player = board.next_player();
-        
+        player = board.next_player();
+
         turn += 1;
     }
 }
