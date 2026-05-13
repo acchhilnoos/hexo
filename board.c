@@ -1,41 +1,41 @@
 #include "board.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-#define max(x, y) ((x) > (y) ? x : y)
-#define min(x, y) ((x) < (y) ? x : y)
-#define xy_to_idx(x, y) (((y) + BOARD_OFFSET) * BOARD_SIZE + (x) + BOARD_OFFSET)
 #define get(b, x, y) (enum Player)(b)->cells[xy_to_idx(x, y)]
-#define set(b, x, y, s) (b)->cells[xy_to_idx(x, y)] = (s)
 
 struct Board *board_new() {
   struct Board *b = malloc(sizeof(*b));
   if (!b)
     return NULL;
 
-  for (size_t i = 0; i < BOARD_SIZE * BOARD_SIZE; i++)
-    b->cells[i] = CELL_EMPTY;
+  for (size_t i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+    b->cells[i]         = CELL_EMPTY;
+    b->cell_to_empty[i] = i;
+    b->empty_to_cell[i] = i;
+  }
   b->n_empty = BOARD_SIZE * BOARD_SIZE;
 
   return b;
 }
 
-enum Player check_player(struct Board *b) {
+void board_copy(struct Board *src, struct Board *dst) { *dst = *src; }
+
+enum Player get_player(struct Board *b) {
   return (((b->n_empty + 1) / 2) % 2 == 1) ? PLAYER_X : PLAYER_O;
 }
 
-bool legal(struct Board *b, int x, int y) {
-  return b->cells[xy_to_idx(x, y)] == CELL_EMPTY;
-}
+bool legal(struct Board *b, size_t idx) { return b->cells[idx] == CELL_EMPTY; }
 
-enum GameState check_state(struct Board *b, int x, int y, enum Player p) {
-  if (b->n_empty == 0)
-    return GAME_DRAW;
-
-  int lb_x = max(x - 5, -BOARD_OFFSET);
-  int lb_y = max(y - 5, -BOARD_OFFSET);
-  int ub_x = min(x + 5, BOARD_OFFSET);
-  int ub_y = min(y + 5, BOARD_OFFSET);
+enum GameState get_state(struct Board *b, size_t idx, enum Player p) {
+  int x    = idx_to_x(idx);
+  int y    = idx_to_y(idx);
+  int lb_x = ((x - 5) > (-BOARD_OFFSET) ? x - 5 : -BOARD_OFFSET);
+  int lb_y = ((y - 5) > (-BOARD_OFFSET) ? y - 5 : -BOARD_OFFSET);
+  int ub_x = ((x + 5) < (BOARD_OFFSET) ? x + 5 : BOARD_OFFSET);
+  int ub_y = ((y + 5) < (BOARD_OFFSET) ? y + 5 : BOARD_OFFSET);
 
   size_t count_h = 1;
   size_t count_v = 1;
@@ -63,15 +63,23 @@ enum GameState check_state(struct Board *b, int x, int y, enum Player p) {
       return GAME_X;
     else
       return GAME_O;
+  else if (b->n_empty == 0)
+    return GAME_DRAW;
   else
     return GAME_CONT;
 }
 
-enum GameState play(struct Board *b, int x, int y) {
-  enum Player p = check_player(b);
-  set(b, x, y, (enum CellState)p);
+enum GameState play(struct Board *b, size_t idx) {
+  enum Player p = get_player(b);
+  b->cells[idx] = ((enum CellState)p);
+
+  size_t empty_idx = b->cell_to_empty[idx];
+  size_t last_idx  = b->empty_to_cell[b->n_empty - 1];
+
+  b->empty_to_cell[empty_idx] = last_idx;
+  b->cell_to_empty[last_idx]  = empty_idx;
   b->n_empty--;
-  return check_state(b, x, y, p);
+  return get_state(b, idx, p);
 }
 
 void board_print(struct Board *b) {
