@@ -1,5 +1,6 @@
 #include "tree.h"
 #include "board.h"
+#include "vec.h"
 #include <float.h>
 #include <math.h>
 #include <stddef.h>
@@ -20,13 +21,12 @@ struct Tree *tree_new(struct Board *b, float c) {
   if (!t)
     return NULL;
 
-  vec_init(t->nodes, 512);
+  vec_init(t->nodes, BOARD_SIZE * BOARD_SIZE);
   if (!t->nodes.buf)
     return NULL;
 
   struct Node root =
       (struct Node){.pol = 1.0f, .turn = get_player(b), .state = GAME_CONT};
-  vec_init(root.c_idxs, 512);
   vec_push(t->nodes, root);
 
   t->c = c;
@@ -35,26 +35,24 @@ struct Tree *tree_new(struct Board *b, float c) {
 }
 
 void tree_free(struct Tree *t) {
-  for (size_t i = 0; i < t->nodes.len; i++)
-    vec_free(vec_at(t->nodes, i).c_idxs);
   vec_free(t->nodes);
   free(t);
 }
 
 size_t select(struct Tree *t, struct Board *b) {
   struct Node *cur_n = &vec_at(t->nodes, 0);
-  size_t       max_i = vec_at(cur_n->c_idxs, 0);
+  size_t       max_i = cur_n->c_idxs;
 
-  while (cur_n->c_idxs.len != 0) {
-    struct Node *max_c = &vec_at(t->nodes, vec_at(cur_n->c_idxs, 0));
+  while (cur_n->num_c != 0) {
+    struct Node *max_c = &vec_at(t->nodes, cur_n->c_idxs);
     float        max_v = -FLT_MAX;
 
-    for (size_t i = 0; i < cur_n->c_idxs.len; i++) {
-      struct Node *cur_c = &vec_at(t->nodes, vec_at(cur_n->c_idxs, i));
+    for (size_t i = 0; i < cur_n->num_c; i++) {
+      struct Node *cur_c = &vec_at(t->nodes, cur_n->c_idxs + i);
       float        v     = puct(cur_c, cur_n, t->c);
 
       if (v > max_v) {
-        max_i = vec_at(cur_n->c_idxs, i);
+        max_i = cur_n->c_idxs + i;
         max_c = cur_c;
         max_v = v;
       }
@@ -72,24 +70,22 @@ void expand(struct Tree *t, struct Board *b, size_t leaf_idx) {
   enum Player c_turn = get_player(b);
   b->n_empty++;
 
-  for (int i = 0; i < b->n_empty; i++) {
-    size_t idx = b->empty_to_cell[i];
+  vec_at(t->nodes, leaf_idx).c_idxs = t->nodes.len;
+  vec_at(t->nodes, leaf_idx).num_c  = b->n_empty;
 
+  for (int i = 0; i < b->n_empty; i++) {
     struct Node c = (struct Node){.parent_idx = leaf_idx,
                                   .pol        = 1.0f,
-                                  .move_idx   = idx,
+                                  .move_idx   = b->empty[i],
                                   .turn       = c_turn,
                                   .state      = GAME_CONT};
-    vec_init(c.c_idxs, 4);
-
-    vec_push(vec_at(t->nodes, leaf_idx).c_idxs, t->nodes.len);
     vec_push(t->nodes, c);
   }
 }
 
 enum GameState simulate(struct Tree *t, struct Board *b) {
   while (b->n_empty > 0) {
-    size_t idx = b->empty_to_cell[rand() % b->n_empty];
+    size_t idx = b->empty[rand() % b->n_empty];
 
     enum GameState s = play(b, idx);
     if (s != GAME_CONT)
@@ -139,7 +135,7 @@ size_t search(struct Tree *t, struct Board *b, size_t it) {
       expand(t, b_copy, leaf_idx);
 
       leaf           = &vec_at(t->nodes, leaf_idx);
-      leaf_idx       = vec_at(leaf->c_idxs, rand() % leaf->c_idxs.len);
+      leaf_idx       = leaf->c_idxs + (rand() % leaf->num_c);
       struct Node *c = &vec_at(t->nodes, leaf_idx);
 
       play(b_copy, c->move_idx);
@@ -152,10 +148,10 @@ size_t search(struct Tree *t, struct Board *b, size_t it) {
   free(b_copy);
 
   struct Node *root       = &vec_at(t->nodes, 0);
-  size_t       max_i      = vec_at(root->c_idxs, 0);
+  size_t       max_i      = root->c_idxs;
   size_t       max_visits = 0;
-  for (size_t i = 0; i < root->c_idxs.len; i++) {
-    size_t       c_idx = vec_at(root->c_idxs, i);
+  for (size_t i = 0; i < root->num_c; i++) {
+    size_t       c_idx = root->c_idxs + i;
     struct Node *c     = &vec_at(t->nodes, c_idx);
 
     if (c->visits > max_visits) {

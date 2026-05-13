@@ -1,7 +1,7 @@
 #ifndef BOARD_H
 #define BOARD_H
 
-#define BOARD_SIZE 15
+#define BOARD_SIZE 31
 #define BOARD_OFFSET (BOARD_SIZE / 2)
 
 #define xy_to_idx(x, y) (((y) + BOARD_OFFSET) * BOARD_SIZE + (x) + BOARD_OFFSET)
@@ -17,7 +17,7 @@ enum CellState { CELL_X, CELL_O, CELL_EMPTY };
 struct Board {
   enum CellState cells[BOARD_SIZE * BOARD_SIZE];
   size_t cell_to_empty[BOARD_SIZE * BOARD_SIZE];
-  size_t empty_to_cell[BOARD_SIZE * BOARD_SIZE];
+  size_t empty[BOARD_SIZE * BOARD_SIZE];
   size_t n_empty;
 };
 

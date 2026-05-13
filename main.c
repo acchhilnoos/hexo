@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
   while (state == GAME_CONT) {
     enum Player  p     = get_player(b);
     struct Tree *t     = tree_new(b, 1.414f);
-    size_t       c_idx = search(t, b, 50000);
+    size_t       c_idx = search(t, b, 100000);
 
     size_t move_idx = t->nodes.buf[c_idx].move_idx;
 

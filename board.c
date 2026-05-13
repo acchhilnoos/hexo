@@ -14,7 +14,7 @@ struct Board *board_new() {
   for (size_t i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
     b->cells[i]         = CELL_EMPTY;
     b->cell_to_empty[i] = i;
-    b->empty_to_cell[i] = i;
+    b->empty[i]         = i;
   }
   b->n_empty = BOARD_SIZE * BOARD_SIZE;
 
@@ -74,10 +74,10 @@ enum GameState play(struct Board *b, size_t idx) {
   b->cells[idx] = ((enum CellState)p);
 
   size_t empty_idx = b->cell_to_empty[idx];
-  size_t last_idx  = b->empty_to_cell[b->n_empty - 1];
+  size_t last_idx  = b->empty[b->n_empty - 1];
 
-  b->empty_to_cell[empty_idx] = last_idx;
-  b->cell_to_empty[last_idx]  = empty_idx;
+  b->empty[empty_idx]        = last_idx;
+  b->cell_to_empty[last_idx] = empty_idx;
   b->n_empty--;
   return get_state(b, idx, p);
 }

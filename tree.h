@@ -4,20 +4,16 @@
 #include "board.h"
 #include "vec.h"
 
-struct size_t_vec {
-  size_t *buf;
-  size_t len;
-  size_t cap;
-};
-
 struct Node {
   size_t parent_idx;
-  // TODO: children are contiguous in
-  //   the enclosing tree->nodes due to
-  //   expand, replace the following with
-  // size_t c_idxs;
-  // size_t num_c;
-  struct size_t_vec c_idxs;
+
+  // NOTE: children are contiguous
+  // + in enclosing Tree.nodes as a
+  // + result of expand() behaviour;
+  // + Node.c_idxs is the index in
+  // + Tree.nodes of the first child
+  size_t c_idxs;
+  size_t num_c;
 
   size_t visits;
   float val, pol;
