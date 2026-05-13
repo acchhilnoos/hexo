@@ -5,11 +5,14 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-static inline float puct(struct Node *n, size_t parent_visits, float c) {
-  return n->visits == 0
-             ? FLT_MAX
-             : n->val / n->visits +
-                   c * n->pol * sqrtf((float)parent_visits) / (1 + n->visits);
+static inline float puct(struct Node *c, struct Node *p, float tree_c) {
+  if (c->visits == 0)
+    return FLT_MAX;
+
+  float q = c->val / c->visits;
+  q       = p->turn == PLAYER_O ? -q : q;
+
+  return q + c->pol * sqrtf((float)p->visits) / (1 + c->visits);
 }
 
 struct Tree *tree_new(struct Board *b, float c) {
@@ -48,7 +51,7 @@ size_t select(struct Tree *t, struct Board *b) {
 
     for (size_t i = 0; i < cur_n->c_idxs.len; i++) {
       struct Node *cur_c = &vec_at(t->nodes, vec_at(cur_n->c_idxs, i));
-      float        v     = puct(cur_c, cur_n->visits, t->c);
+      float        v     = puct(cur_c, cur_n, t->c);
 
       if (v > max_v) {
         max_i = vec_at(cur_n->c_idxs, i);
@@ -102,30 +105,19 @@ void backpropagate(struct Tree *t, size_t c_idx, float v) {
     cur_c->visits++;
     cur_c->val += v;
 
-    if (c_idx != 0) {
-      enum Player turn    = cur_c->turn;
-      c_idx               = cur_c->parent_idx;
-      struct Node *parent = &vec_at(t->nodes, c_idx);
-
-      if (parent->turn != turn)
-        v = -v;
-    } else
+    if (c_idx != 0)
+      c_idx = cur_c->parent_idx;
+    else
       break;
   }
 }
 
-static inline float value(enum GameState s, enum Player p) {
+static inline float value(enum GameState s) {
   switch (s) {
   case GAME_X:
-    if (p == PLAYER_X)
-      return 1.0f;
-    else
-      return -1.0f;
+    return 1.0f;
   case GAME_O:
-    if (p == PLAYER_O)
-      return 1.0f;
-    else
-      return -1.0f;
+    return -1.0f;
   case GAME_DRAW:
     return 0.0f;
   case GAME_CONT:
@@ -142,16 +134,16 @@ size_t search(struct Tree *t, struct Board *b, size_t it) {
     size_t       leaf_idx = select(t, b_copy);
     struct Node *leaf     = &vec_at(t->nodes, leaf_idx);
 
-    float v = value(leaf->state, leaf->turn);
+    float v = value(leaf->state);
     if (v == -FLT_MAX) {
       expand(t, b_copy, leaf_idx);
 
-      leaf               = &vec_at(t->nodes, leaf_idx);
-      leaf_idx           = vec_at(leaf->c_idxs, rand() % leaf->c_idxs.len);
-      struct Node *child = &vec_at(t->nodes, leaf_idx);
+      leaf           = &vec_at(t->nodes, leaf_idx);
+      leaf_idx       = vec_at(leaf->c_idxs, rand() % leaf->c_idxs.len);
+      struct Node *c = &vec_at(t->nodes, leaf_idx);
 
-      play(b_copy, child->move_idx);
-      v = value(simulate(t, b_copy), child->turn);
+      play(b_copy, c->move_idx);
+      v = value(simulate(t, b_copy));
     }
 
     backpropagate(t, leaf_idx, v);
@@ -160,7 +152,7 @@ size_t search(struct Tree *t, struct Board *b, size_t it) {
   free(b_copy);
 
   struct Node *root       = &vec_at(t->nodes, 0);
-  size_t       max_i      = vec_at(root->c_idxs, 0); // Safety init
+  size_t       max_i      = vec_at(root->c_idxs, 0);
   size_t       max_visits = 0;
   for (size_t i = 0; i < root->c_idxs.len; i++) {
     size_t       c_idx = vec_at(root->c_idxs, i);
