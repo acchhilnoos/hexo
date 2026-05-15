@@ -1,8 +1,6 @@
 #include "board.h"
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define get(b, x, y) (enum Player)(b)->cells[xy_to_idx(x, y)]
 

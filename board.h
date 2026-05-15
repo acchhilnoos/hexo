@@ -1,7 +1,7 @@
 #ifndef BOARD_H
 #define BOARD_H
 
-#define BOARD_SIZE 31
+#define BOARD_SIZE 23
 #define BOARD_OFFSET (BOARD_SIZE / 2)
 
 #define xy_to_idx(x, y) (((y) + BOARD_OFFSET) * BOARD_SIZE + (x) + BOARD_OFFSET)

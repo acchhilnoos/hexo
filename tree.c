@@ -1,10 +1,8 @@
 #include "tree.h"
-#include "board.h"
 #include "vec.h"
 #include <float.h>
 #include <math.h>
-#include <stddef.h>
-#include <stdlib.h>
+#include <stdio.h>
 
 static inline float puct(struct Node *c, struct Node *p, float tree_c) {
   if (c->visits == 0)
@@ -73,7 +71,7 @@ void expand(struct Tree *t, struct Board *b, size_t leaf_idx) {
   vec_at(t->nodes, leaf_idx).c_idxs = t->nodes.len;
   vec_at(t->nodes, leaf_idx).num_c  = b->n_empty;
 
-  for (int i = 0; i < b->n_empty; i++) {
+  for (size_t i = 0; i < b->n_empty; i++) {
     struct Node c = (struct Node){.parent_idx = leaf_idx,
                                   .pol        = 1.0f,
                                   .move_idx   = b->empty[i],
@@ -160,4 +158,38 @@ size_t search(struct Tree *t, struct Board *b, size_t it) {
     }
   }
   return max_i;
+}
+
+void tree_peek(struct Tree *t) {
+  struct Node *root = &vec_at(t->nodes, 0);
+
+  size_t k = root->num_c < 5 ? root->num_c : 5;
+
+  size_t *top_idxs = malloc(root->num_c * sizeof(*top_idxs));
+  for (size_t i = 0; i < root->num_c; i++)
+    top_idxs[i] = root->c_idxs + i;
+
+  for (size_t i = 0; i < k; i++) {
+    size_t max_i = i;
+    for (size_t j = i + 1; j < root->num_c; j++) {
+      if (vec_at(t->nodes, top_idxs[j]).visits >
+          vec_at(t->nodes, top_idxs[max_i]).visits)
+        max_i = j;
+    }
+    size_t t        = top_idxs[i];
+    top_idxs[i]     = top_idxs[max_i];
+    top_idxs[max_i] = t;
+  }
+
+  for (size_t i = 0; i < k; i++) {
+    struct Node *c = &vec_at(t->nodes, top_idxs[i]);
+    int          x = idx_to_x(c->move_idx);
+    int          y = idx_to_y(c->move_idx);
+    float        q = c->visits > 0 ? c->val / c->visits : 0.0f;
+    q              = root->turn == PLAYER_O ? -q : q;
+
+    printf("%zu. move (%3d, %3d) | Visits: %6zu | Q: %6.3f | P: %.3f\n", i + 1,
+           x, y, c->visits, q, c->pol);
+  }
+  free(top_idxs);
 }

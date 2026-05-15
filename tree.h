@@ -38,4 +38,6 @@ enum GameState simulate(struct Tree *t, struct Board *b);
 void backpropagate(struct Tree *t, size_t child_idx, float v);
 size_t search(struct Tree *t, struct Board *b, size_t it);
 
+void tree_peek(struct Tree *t);
+
 #endif
