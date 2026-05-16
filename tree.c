@@ -1,4 +1,5 @@
 #include "tree.h"
+#include "board.h"
 #include "vec.h"
 #include <float.h>
 #include <math.h>
@@ -37,6 +38,34 @@ void tree_free(struct Tree *t) {
   free(t);
 }
 
+static inline float value(enum GameState s) {
+  switch (s) {
+  case GAME_X:
+    return 1.0f;
+  case GAME_O:
+    return -1.0f;
+  case GAME_DRAW:
+    return 0.0f;
+  case GAME_CONT:
+    return -FLT_MAX;
+  }
+}
+
+void board_to_tensor(struct Board *b, struct Tensor *t) {
+  tensor_zero(t);
+  enum Player turn = get_player(b);
+
+  for (size_t i = 0; i < BOARD_SIZE * BOARD_SIZE; i++) {
+    if (b->cells[i] == CELL_EMPTY)
+      continue;
+
+    if (b->cells[i] == (enum CellState)turn)
+      t->buf[i] = 1.0f;
+    else
+      t->buf[BOARD_SIZE * BOARD_SIZE + i] = 1.0f;
+  }
+}
+
 size_t select(struct Tree *t, struct Board *b) {
   struct Node *cur_n = &vec_at(t->nodes, 0);
   size_t       max_i = cur_n->c_idxs;
@@ -73,7 +102,7 @@ void expand(struct Tree *t, struct Board *b, size_t leaf_idx) {
 
   for (size_t i = 0; i < b->n_empty; i++) {
     struct Node c = (struct Node){.parent_idx = leaf_idx,
-                                  .pol        = 1.0f,
+                                  .pol        = 0.1f,
                                   .move_idx   = b->empty[i],
                                   .turn       = c_turn,
                                   .state      = GAME_CONT};
@@ -106,21 +135,11 @@ void backpropagate(struct Tree *t, size_t c_idx, float v) {
   }
 }
 
-static inline float value(enum GameState s) {
-  switch (s) {
-  case GAME_X:
-    return 1.0f;
-  case GAME_O:
-    return -1.0f;
-  case GAME_DRAW:
-    return 0.0f;
-  case GAME_CONT:
-    return -FLT_MAX;
-  }
-}
-
-size_t search(struct Tree *t, struct Board *b, size_t it) {
+size_t search(struct Tree *t, struct Board *b, struct Network *n, size_t it) {
+  // TODO: pass inputs (+b_copy?) from main?
   struct Board *b_copy = malloc(sizeof(*b_copy));
+  struct Tensor inputs;
+  tensor_init(&inputs, 1, 2, BOARD_SIZE, BOARD_SIZE);
 
   for (size_t i = 0; i < it; i++) {
     board_copy(b, b_copy);
@@ -132,17 +151,30 @@ size_t search(struct Tree *t, struct Board *b, size_t it) {
     if (v == -FLT_MAX) {
       expand(t, b_copy, leaf_idx);
 
-      leaf           = &vec_at(t->nodes, leaf_idx);
-      leaf_idx       = leaf->c_idxs + (rand() % leaf->num_c);
-      struct Node *c = &vec_at(t->nodes, leaf_idx);
+      board_to_tensor(b_copy, &inputs);
+      network_forward(n, &inputs, b_copy);
 
-      play(b_copy, c->move_idx);
-      v = value(simulate(t, b_copy));
+      v = n->as[8].buf[0];
+
+      leaf = &vec_at(t->nodes, leaf_idx);
+      for (size_t c_idx = 0; c_idx < leaf->num_c; c_idx++) {
+        struct Node *c = &vec_at(t->nodes, leaf->c_idxs + c_idx);
+
+        c->pol = n->as[5].buf[c->move_idx];
+      }
+
+      // leaf           = &vec_at(t->nodes, leaf_idx);
+      // leaf_idx       = leaf->c_idxs + (rand() % leaf->num_c);
+      // struct Node *c = &vec_at(t->nodes, leaf_idx);
+      //
+      // play(b_copy, c->move_idx);
+      // v = value(simulate(t, b_copy));
     }
 
     backpropagate(t, leaf_idx, v);
   }
 
+  tensor_free(&inputs);
   free(b_copy);
 
   struct Node *root       = &vec_at(t->nodes, 0);

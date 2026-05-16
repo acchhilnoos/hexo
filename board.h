@@ -1,15 +1,15 @@
 #ifndef BOARD_H
 #define BOARD_H
 
-#define BOARD_SIZE 23
+#include <stdbool.h>
+#include <stddef.h>
+
+#define BOARD_SIZE 17
 #define BOARD_OFFSET (BOARD_SIZE / 2)
 
 #define xy_to_idx(x, y) (((y) + BOARD_OFFSET) * BOARD_SIZE + (x) + BOARD_OFFSET)
 #define idx_to_x(idx) ((int)((idx) % BOARD_SIZE) - BOARD_OFFSET)
 #define idx_to_y(idx) ((int)((idx) / BOARD_SIZE) - BOARD_OFFSET)
-
-#include <stdbool.h>
-#include <stddef.h>
 
 enum Player { PLAYER_X, PLAYER_O };
 enum GameState { GAME_X, GAME_O, GAME_DRAW, GAME_CONT };

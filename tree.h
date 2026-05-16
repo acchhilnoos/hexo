@@ -2,6 +2,7 @@
 #define TREE_H
 
 #include "board.h"
+#include "network.h"
 #include "vec.h"
 
 struct Node {
@@ -32,11 +33,13 @@ struct Tree {
 struct Tree *tree_new(struct Board *b, float c);
 void tree_free(struct Tree *t);
 
+void board_to_tensor(struct Board *b, struct Tensor *t);
+
 size_t select(struct Tree *t, struct Board *b);
 void expand(struct Tree *t, struct Board *b, size_t leaf_idx);
 enum GameState simulate(struct Tree *t, struct Board *b);
 void backpropagate(struct Tree *t, size_t child_idx, float v);
-size_t search(struct Tree *t, struct Board *b, size_t it);
+size_t search(struct Tree *t, struct Board *b, struct Network *n, size_t it);
 
 void tree_peek(struct Tree *t);
 

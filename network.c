@@ -1,8 +1,10 @@
 #include "network.h"
 #include "tensor.h"
 #include <float.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 struct Network *network_new() {
   struct Network *n = malloc(sizeof(*n));
@@ -49,6 +51,14 @@ void network_free(struct Network *n) {
   free(n);
 }
 
+void network_zero_grad(struct Network *n) {
+  for (size_t i = 0; i < 9; i++) {
+    tensor_zero_grad(&n->ks[i]);
+    tensor_zero_grad(&n->bs[i]);
+    tensor_zero_grad(&n->as[i]);
+  }
+}
+
 void network_forward(struct Network *n, struct Tensor *inputs,
                      struct Board *b) {
   tensor_conv(inputs, &n->ks[0], &n->bs[0], &n->as[0], 1);
@@ -85,14 +95,6 @@ void network_forward(struct Network *n, struct Tensor *inputs,
 
 void network_backward(struct Network *n, struct Tensor *inputs,
                       struct Tensor *loss_p, struct Tensor *loss_v) {
-  for (size_t i = 0; i < 9; i++) {
-    tensor_zero_grad(&n->ks[i]);
-    tensor_zero_grad(&n->bs[i]);
-    tensor_zero_grad(&n->as[i]);
-  }
-  if (inputs->grad)
-    tensor_zero_grad(inputs);
-
   memcpy(n->as[5].grad, loss_p->buf,
          tensor_size(loss_p) * sizeof(*loss_p->buf));
   memcpy(n->as[8].grad, loss_v->buf,
@@ -133,4 +135,82 @@ void network_sgd(struct Network *n, float alpha) {
     for (size_t j = 0; j < tensor_size(&n->bs[i]); j++)
       n->bs[i].buf[j] -= alpha * n->bs[i].grad[j];
   }
+}
+
+void network_save(struct Network *n, const char *path) {
+  FILE *f = fopen(path, "wb");
+  if (!f) return;
+  for (size_t i = 0; i < 9; i++) {
+    fwrite(n->ks[i].buf, sizeof(float), tensor_size(&n->ks[i]), f);
+    fwrite(n->bs[i].buf, sizeof(float), tensor_size(&n->bs[i]), f);
+  }
+  fclose(f);
+}
+
+void network_load(struct Network *n, const char *path) {
+  FILE *f = fopen(path, "rb");
+  if (!f) return;
+  for (size_t i = 0; i < 9; i++) {
+    fread(n->ks[i].buf, sizeof(float), tensor_size(&n->ks[i]), f);
+    fread(n->bs[i].buf, sizeof(float), tensor_size(&n->bs[i]), f);
+  }
+  fclose(f);
+}
+
+void network_benchmark() {
+  printf("Benchmarking (1000 iterations)...\n");
+
+  struct Network *n = network_new();
+  struct Board   *b = board_new();
+
+  for (int i = 0; i < 20; i++) {
+    if (b->n_empty > 0) {
+      play(b, b->empty[rand() % b->n_empty]);
+    }
+  }
+
+  for (size_t i = 0; i < 9; i++) {
+    for (size_t j = 0; j < tensor_size(&n->ks[i]); j++) {
+      n->ks[i].buf[j] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+    }
+    for (size_t j = 0; j < tensor_size(&n->bs[i]); j++) {
+      n->bs[i].buf[j] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+    }
+  }
+
+  struct Tensor inputs, loss_p, loss_v;
+  tensor_init(&inputs, 1, 2, BOARD_SIZE, BOARD_SIZE);
+  tensor_init(&loss_p, 1, 1, BOARD_SIZE, BOARD_SIZE);
+  tensor_init(&loss_v, 1, 1, 1, 1);
+
+  for (size_t i = 0; i < tensor_size(&inputs); i++) {
+    inputs.buf[i] = (float)(rand() % 2);
+  }
+  for (size_t i = 0; i < tensor_size(&loss_p); i++) {
+    loss_p.buf[i] = (float)rand() / RAND_MAX;
+  }
+  loss_v.buf[0] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+
+  for (int i = 0; i < 500; i++) {
+    network_forward(n, &inputs, b);
+    network_backward(n, &inputs, &loss_p, &loss_v);
+  }
+
+  clock_t start = clock();
+  for (int i = 0; i < 1000; i++) {
+    network_forward(n, &inputs, b);
+    network_backward(n, &inputs, &loss_p, &loss_v);
+  }
+  clock_t end = clock();
+
+  double time_spent = (double)(end - start) / CLOCKS_PER_SEC;
+  printf("Time for 1000 Forward+Backward passes: %f seconds\n", time_spent);
+  printf("Average time per pass: %f ms\n", (time_spent / 1000.0) * 1000.0);
+  printf("Estimated Evals per Second: %.2f\n\n", 1000.0 / time_spent);
+
+  tensor_free(&loss_v);
+  tensor_free(&loss_p);
+  tensor_free(&inputs);
+  network_free(n);
+  free(b);
 }

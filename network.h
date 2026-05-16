@@ -24,7 +24,17 @@ struct Network {
 struct Network *network_new();
 void network_free(struct Network *n);
 
+void network_zero_grad(struct Network *n);
+
 void network_forward(struct Network *n, struct Tensor *inputs, struct Board *b);
-void network_backward(struct Network *n, struct Tensor *inputs, struct Tensor *loss_p, struct Tensor *loss_v);
+void network_backward(struct Network *n, struct Tensor *inputs,
+                      struct Tensor *loss_p, struct Tensor *loss_v);
+
+void network_sgd(struct Network *n, float alpha);
+
+void network_save(struct Network *n, const char *path);
+void network_load(struct Network *n, const char *path);
+
+void network_benchmark();
 
 #endif

@@ -7,8 +7,7 @@
 #define def_vec(t)                                                             \
   struct t##_vec {                                                             \
     struct t *buf;                                                             \
-    size_t len;                                                                \
-    size_t cap;                                                                \
+    size_t len, cap;                                                           \
   }
 
 #define vec_init(v, n)                                                         \
