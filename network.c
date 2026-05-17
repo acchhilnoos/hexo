@@ -1,6 +1,7 @@
 #include "network.h"
 #include "tensor.h"
 #include <float.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,14 @@ struct Network *network_new() {
   tensor_init(&n->as[6], 1, 1, BOARD_SIZE, BOARD_SIZE);
   tensor_init(&n->as[7], 1, 32, 1, 1);
   tensor_init(&n->as[8], 1, 1, 1, 1);
+
+  for (size_t i = 0; i < 9; i++) {
+    float fan_in = (float)(n->ks[i].c * n->ks[i].y * n->ks[i].x);
+    float limit  = sqrtf(6.0f / fan_in);
+
+    for (size_t j = 0; j < tensor_size(&n->ks[i]); j++)
+      n->ks[i].buf[j] = (((float)rand() / RAND_MAX) * 2.0f - 1.0f) * limit;
+  }
 
   return n;
 }
@@ -77,9 +86,10 @@ void network_forward(struct Network *n, struct Tensor *inputs,
   tensor_relu(&n->as[4]);
 
   tensor_conv(&n->as[4], &n->ks[5], &n->bs[5], &n->as[5], 0);
-  for (size_t i = 0; i < BOARD_SIZE * BOARD_SIZE; i++)
-    if (!legal(b, i))
-      n->as[5].buf[i] = -FLT_MAX;
+  if (b)
+    for (size_t i = 0; i < BOARD_SIZE * BOARD_SIZE; i++)
+      if (!legal(b, i))
+        n->as[5].buf[i] = -FLT_MAX;
   tensor_softmax(&n->as[5]);
 
   tensor_conv(&n->as[4], &n->ks[6], &n->bs[6], &n->as[6], 0);
@@ -95,6 +105,9 @@ void network_forward(struct Network *n, struct Tensor *inputs,
 
 void network_backward(struct Network *n, struct Tensor *inputs,
                       struct Tensor *loss_p, struct Tensor *loss_v) {
+  for (size_t i = 0; i < 9; i++)
+    tensor_zero_grad(&n->as[i]);
+
   memcpy(n->as[5].grad, loss_p->buf,
          tensor_size(loss_p) * sizeof(*loss_p->buf));
   memcpy(n->as[8].grad, loss_v->buf,
@@ -139,7 +152,8 @@ void network_sgd(struct Network *n, float alpha) {
 
 void network_save(struct Network *n, const char *path) {
   FILE *f = fopen(path, "wb");
-  if (!f) return;
+  if (!f)
+    return;
   for (size_t i = 0; i < 9; i++) {
     fwrite(n->ks[i].buf, sizeof(float), tensor_size(&n->ks[i]), f);
     fwrite(n->bs[i].buf, sizeof(float), tensor_size(&n->bs[i]), f);
@@ -149,7 +163,8 @@ void network_save(struct Network *n, const char *path) {
 
 void network_load(struct Network *n, const char *path) {
   FILE *f = fopen(path, "rb");
-  if (!f) return;
+  if (!f)
+    return;
   for (size_t i = 0; i < 9; i++) {
     fread(n->ks[i].buf, sizeof(float), tensor_size(&n->ks[i]), f);
     fread(n->bs[i].buf, sizeof(float), tensor_size(&n->bs[i]), f);

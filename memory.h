@@ -3,7 +3,6 @@
 
 #include "board.h"
 #include "tensor.h"
-#include <stddef.h>
 
 #define MEM_BUF_MAX 8192
 
@@ -16,6 +15,7 @@ struct Memory {
 
 struct MemoryBuffer {
   struct Memory buf[MEM_BUF_MAX];
+  size_t head;
   size_t n;
 };
 

@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define BOARD_SIZE 17
+#define BOARD_SIZE 15
 #define BOARD_OFFSET (BOARD_SIZE / 2)
 
 #define xy_to_idx(x, y) (((y) + BOARD_OFFSET) * BOARD_SIZE + (x) + BOARD_OFFSET)

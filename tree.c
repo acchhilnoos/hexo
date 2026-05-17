@@ -6,13 +6,12 @@
 #include <stdio.h>
 
 static inline float puct(struct Node *c, struct Node *p, float tree_c) {
-  if (c->visits == 0)
-    return FLT_MAX;
-
-  float q = c->val / c->visits;
+  float q = c->visits > 0   ? c->val / c->visits
+            : p->visits > 0 ? p->val / p->visits
+                            : 0.0f;
   q       = p->turn == PLAYER_O ? -q : q;
 
-  return q + c->pol * sqrtf((float)p->visits) / (1 + c->visits);
+  return q + tree_c * c->pol * sqrtf((float)p->visits) / (1 + c->visits);
 }
 
 struct Tree *tree_new(struct Board *b, float c) {
@@ -136,7 +135,6 @@ void backpropagate(struct Tree *t, size_t c_idx, float v) {
 }
 
 size_t search(struct Tree *t, struct Board *b, struct Network *n, size_t it) {
-  // TODO: pass inputs (+b_copy?) from main?
   struct Board *b_copy = malloc(sizeof(*b_copy));
   struct Tensor inputs;
   tensor_init(&inputs, 1, 2, BOARD_SIZE, BOARD_SIZE);
@@ -154,14 +152,32 @@ size_t search(struct Tree *t, struct Board *b, struct Network *n, size_t it) {
       board_to_tensor(b_copy, &inputs);
       network_forward(n, &inputs, b_copy);
 
-      v = n->as[8].buf[0];
-
       leaf = &vec_at(t->nodes, leaf_idx);
       for (size_t c_idx = 0; c_idx < leaf->num_c; c_idx++) {
         struct Node *c = &vec_at(t->nodes, leaf->c_idxs + c_idx);
-
-        c->pol = n->as[5].buf[c->move_idx];
+        c->pol         = n->as[5].buf[c->move_idx];
       }
+
+      if (leaf_idx == 0) {
+        float noise[BOARD_SIZE * BOARD_SIZE];
+        float sum   = 0.0f;
+        float alpha = 0.03f;
+
+        for (size_t i = 0; i < leaf->num_c; i++) {
+          float u  = (float)rand() / RAND_MAX + 1e-8f;
+          noise[i] = powf(u, 1.0f / alpha);
+          sum += noise[i];
+        }
+
+        for (size_t i = 0; i < leaf->num_c; i++) {
+          struct Node *c = &vec_at(t->nodes, leaf->c_idxs + i);
+          c->pol         = 0.75f * c->pol + 0.25f * noise[i] / sum;
+        }
+      }
+
+      v = n->as[8].buf[0];
+      if (leaf->turn == PLAYER_O)
+        v = -v;
 
       // leaf           = &vec_at(t->nodes, leaf_idx);
       // leaf_idx       = leaf->c_idxs + (rand() % leaf->num_c);

@@ -23,7 +23,7 @@
 
 #define vec_push(v, x)                                                         \
   do {                                                                         \
-    if ((v).len + 1 >= (v).cap) {                                              \
+    if ((v).len >= (v).cap) {                                                  \
       (v).cap = (v).cap == 0 ? 4 : (v).cap * 2;                                \
       void *_vec_push_temp = realloc((v).buf, (v).cap * sizeof(*(v).buf));     \
       if (!_vec_push_temp)                                                     \

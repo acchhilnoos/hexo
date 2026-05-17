@@ -3,13 +3,12 @@
 
 void mem_push(struct MemoryBuffer *b, struct Tensor *state, struct Tensor *pol,
               enum Player turn, float z) {
-  if (b->n + 1 >= MEM_BUF_MAX)
-    b->n = 0;
+  memcpy(b->buf[b->head].state, state->buf, sizeof(b->buf[b->head].state));
+  memcpy(b->buf[b->head].pol, pol->buf, sizeof(b->buf[b->head].pol));
+  b->buf[b->head].turn = turn;
+  b->buf[b->head].z    = z;
 
-  memcpy(b->buf[b->n].state, state->buf, sizeof(b->buf[b->n].state));
-  memcpy(b->buf[b->n].pol, pol->buf, sizeof(b->buf[b->n].pol));
-  b->buf[b->n].turn = turn;
-  b->buf[b->n].z    = z;
-
-  b->n++;
+  b->head = (b->head + 1) % MEM_BUF_MAX;
+  if (b->n < MEM_BUF_MAX)
+    b->n++;
 }
