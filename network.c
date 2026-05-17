@@ -7,7 +7,7 @@
 #include <string.h>
 #include <time.h>
 
-struct Network *network_new() {
+struct Network *network_new(void) {
   struct Network *n = malloc(sizeof(*n));
 
   tensor_init(&n->ks[0], 16, 2, 3, 3);
@@ -172,7 +172,7 @@ void network_load(struct Network *n, const char *path) {
   fclose(f);
 }
 
-void network_benchmark() {
+void network_benchmark(void) {
   printf("Benchmarking (1000 iterations)...\n");
 
   struct Network *n = network_new();

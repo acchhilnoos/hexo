@@ -109,7 +109,7 @@ void expand(struct Tree *t, struct Board *b, size_t leaf_idx) {
   }
 }
 
-enum GameState simulate(struct Tree *t, struct Board *b) {
+enum GameState simulate(struct Board *b) {
   while (b->n_empty > 0) {
     size_t idx = b->empty[rand() % b->n_empty];
 

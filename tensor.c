@@ -96,8 +96,6 @@ void tensor_conv(struct Tensor *in, struct Tensor *k, struct Tensor *bias,
         for (size_t ky = 0; ky < k->y; ky++) {
           for (size_t kx = 0; kx < k->x; kx++) {
             float w = tensor_at(k, oc, ic, ky, kx);
-            // if (w == 0.0f)
-            //   continue;
 
             for (size_t y = 0; y < out->y; y++) {
               int in_y = (int)y + (int)ky - (int)pad;

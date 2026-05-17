@@ -4,7 +4,7 @@
 
 #define get(b, x, y) (enum Player)(b)->cells[xy_to_idx(x, y)]
 
-struct Board *board_new() {
+struct Board *board_new(void) {
   struct Board *b = malloc(sizeof(*b));
   if (!b)
     return NULL;
