@@ -19,9 +19,12 @@ struct Network {
   struct Tensor ks[9];
   struct Tensor bs[9];
   struct Tensor as[9];
+
+  struct Tensor m_ks[9];
+  struct Tensor m_bs[9];
 };
 
-struct Network *network_new();
+struct Network *network_new(void);
 void network_free(struct Network *n);
 
 void network_zero_grad(struct Network *n);
@@ -35,6 +38,6 @@ void network_sgd(struct Network *n, float alpha);
 void network_save(struct Network *n, const char *path);
 void network_load(struct Network *n, const char *path);
 
-void network_benchmark();
+void network_benchmark(void);
 
 #endif

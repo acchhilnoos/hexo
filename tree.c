@@ -9,7 +9,8 @@ static inline float puct(struct Node *c, struct Node *p, float tree_c) {
   float q = c->visits > 0   ? c->val / c->visits
             : p->visits > 0 ? p->val / p->visits
                             : 0.0f;
-  q       = p->turn == PLAYER_O ? -q : q;
+  // transform absolute eval into relative eval for select
+  q = p->turn == PLAYER_O ? -q : q;
 
   return q + tree_c * c->pol * sqrtf((float)p->visits) / (1 + c->visits);
 }
@@ -59,9 +60,9 @@ void board_to_tensor(struct Board *b, struct Tensor *t) {
       continue;
 
     if (b->cells[i] == (enum CellState)turn)
-      t->buf[i] = 1.0f;
+      t->buf[i * 2 + 0] = 1.0f;
     else
-      t->buf[BOARD_SIZE * BOARD_SIZE + i] = 1.0f;
+      t->buf[i * 2 + 1] = 1.0f;
   }
 }
 
@@ -109,7 +110,7 @@ void expand(struct Tree *t, struct Board *b, size_t leaf_idx) {
   }
 }
 
-enum GameState simulate(struct Tree *t, struct Board *b) {
+enum GameState simulate(struct Board *b) {
   while (b->n_empty > 0) {
     size_t idx = b->empty[rand() % b->n_empty];
 
@@ -137,27 +138,35 @@ void backpropagate(struct Tree *t, size_t c_idx, float v) {
 size_t search(struct Tree *t, struct Board *b, struct Network *n, size_t it) {
   struct Board *b_copy = malloc(sizeof(*b_copy));
   struct Tensor inputs;
-  tensor_init(&inputs, 1, 2, BOARD_SIZE, BOARD_SIZE);
+  tensor_init(&inputs, 1, BOARD_SIZE, BOARD_SIZE, 2);
 
   for (size_t i = 0; i < it; i++) {
     board_copy(b, b_copy);
 
+    // play and traverse expanded moves and nodes until a leaf is reached
     size_t       leaf_idx = select(t, b_copy);
     struct Node *leaf     = &vec_at(t->nodes, leaf_idx);
 
+    // calculate v if leaf is terminal
     float v = value(leaf->state);
+    // else
     if (v == -FLT_MAX) {
+      // expand children of leaf
       expand(t, b_copy, leaf_idx);
 
       board_to_tensor(b_copy, &inputs);
       network_forward(n, &inputs, b_copy);
 
+      // recalculate pointer to leaf in case expand reallocated t->nodes
       leaf = &vec_at(t->nodes, leaf_idx);
+
+      // assign child pol values as given by network policy head
       for (size_t c_idx = 0; c_idx < leaf->num_c; c_idx++) {
         struct Node *c = &vec_at(t->nodes, leaf->c_idxs + c_idx);
         c->pol         = n->as[5].buf[c->move_idx];
       }
 
+      // apply Dirichlet noise to root children
       if (leaf_idx == 0) {
         float noise[BOARD_SIZE * BOARD_SIZE];
         float sum   = 0.0f;
@@ -175,18 +184,22 @@ size_t search(struct Tree *t, struct Board *b, struct Network *n, size_t it) {
         }
       }
 
+      // assign v as given by network value head
       v = n->as[8].buf[0];
+      // transform relative network eval to absolute eval
       if (leaf->turn == PLAYER_O)
         v = -v;
 
-      // leaf           = &vec_at(t->nodes, leaf_idx);
-      // leaf_idx       = leaf->c_idxs + (rand() % leaf->num_c);
-      // struct Node *c = &vec_at(t->nodes, leaf_idx);
-      //
-      // play(b_copy, c->move_idx);
-      // v = value(simulate(t, b_copy));
+      /* pure mcts
+       * leaf           = &vec_at(t->nodes, leaf_idx);
+       * leaf_idx       = leaf->c_idxs + (rand() % leaf->num_c);
+       * struct Node *c = &vec_at(t->nodes, leaf_idx);
+       *
+       * play(b_copy, c->move_idx);
+       * v = value(simulate(t, b_copy)); */
     }
 
+    // propagate absolute values from leaf to root
     backpropagate(t, leaf_idx, v);
   }
 

@@ -7,46 +7,60 @@
 #include <string.h>
 #include <time.h>
 
-struct Network *network_new() {
+#define MAX_BATCH_SIZE 64
+
+struct Network *network_new(void) {
   struct Network *n = malloc(sizeof(*n));
 
-  tensor_init(&n->ks[0], 16, 2, 3, 3);
-  tensor_init(&n->ks[1], 16, 16, 3, 3);
-  tensor_init(&n->ks[2], 16, 16, 3, 3);
-  tensor_init(&n->ks[3], 16, 16, 3, 3);
-  tensor_init(&n->ks[4], 16, 16, 3, 3);
-  tensor_init(&n->ks[5], 1, 16, 1, 1);
-  tensor_init(&n->ks[6], 1, 16, 1, 1);
-  tensor_init(&n->ks[7], 32, BOARD_SIZE * BOARD_SIZE, 1, 1);
-  tensor_init(&n->ks[8], 1, 32, 1, 1);
+  // kernels: [ky, kx, ic, oc]
+  tensor_init(&n->ks[0], 3, 3, 2, 16);
+  tensor_init(&n->ks[1], 3, 3, 16, 16);
+  tensor_init(&n->ks[2], 3, 3, 16, 16);
+  tensor_init(&n->ks[3], 3, 3, 16, 16);
+  tensor_init(&n->ks[4], 3, 3, 16, 16);
+  tensor_init(&n->ks[5], 1, 1, 16, 1);
+  tensor_init(&n->ks[6], 1, 1, 16, 1);
+  tensor_init(&n->ks[7], 1, 1, BOARD_SIZE * BOARD_SIZE, 32);
+  tensor_init(&n->ks[8], 1, 1, 32, 1);
 
-  tensor_init(&n->bs[0], 1, 16, 1, 1);
-  tensor_init(&n->bs[1], 1, 16, 1, 1);
-  tensor_init(&n->bs[2], 1, 16, 1, 1);
-  tensor_init(&n->bs[3], 1, 16, 1, 1);
-  tensor_init(&n->bs[4], 1, 16, 1, 1);
+  // biases: [1, 1, 1, oc]
+  tensor_init(&n->bs[0], 1, 1, 1, 16);
+  tensor_init(&n->bs[1], 1, 1, 1, 16);
+  tensor_init(&n->bs[2], 1, 1, 1, 16);
+  tensor_init(&n->bs[3], 1, 1, 1, 16);
+  tensor_init(&n->bs[4], 1, 1, 1, 16);
   tensor_init(&n->bs[5], 1, 1, 1, 1);
   tensor_init(&n->bs[6], 1, 1, 1, 1);
-  tensor_init(&n->bs[7], 1, 32, 1, 1);
+  tensor_init(&n->bs[7], 1, 1, 1, 32);
   tensor_init(&n->bs[8], 1, 1, 1, 1);
 
-  tensor_init(&n->as[0], 1, 16, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&n->as[1], 1, 16, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&n->as[2], 1, 16, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&n->as[3], 1, 16, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&n->as[4], 1, 16, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&n->as[5], 1, 1, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&n->as[6], 1, 1, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&n->as[7], 1, 32, 1, 1);
-  tensor_init(&n->as[8], 1, 1, 1, 1);
+  // activations: [MAX_BATCH_SIZE, y, x, c]
+  tensor_init(&n->as[0], MAX_BATCH_SIZE, BOARD_SIZE, BOARD_SIZE, 16);
+  tensor_init(&n->as[1], MAX_BATCH_SIZE, BOARD_SIZE, BOARD_SIZE, 16);
+  tensor_init(&n->as[2], MAX_BATCH_SIZE, BOARD_SIZE, BOARD_SIZE, 16);
+  tensor_init(&n->as[3], MAX_BATCH_SIZE, BOARD_SIZE, BOARD_SIZE, 16);
+  tensor_init(&n->as[4], MAX_BATCH_SIZE, BOARD_SIZE, BOARD_SIZE, 16);
+  tensor_init(&n->as[5], MAX_BATCH_SIZE, BOARD_SIZE, BOARD_SIZE, 1);
+  tensor_init(&n->as[6], MAX_BATCH_SIZE, BOARD_SIZE, BOARD_SIZE, 1);
+  tensor_init(&n->as[7], MAX_BATCH_SIZE, 1, 1, 32);
+  tensor_init(&n->as[8], MAX_BATCH_SIZE, 1, 1, 1);
 
   for (size_t i = 0; i < 9; i++) {
-    float fan_in = (float)(n->ks[i].c * n->ks[i].y * n->ks[i].x);
-    float limit  = sqrtf(6.0f / fan_in);
+    struct Tensor *ks = &n->ks[i];
+    struct Tensor *bs = &n->bs[i];
+
+    tensor_init(&n->m_ks[i], ks->n, ks->y, ks->x, ks->c);
+    tensor_init(&n->m_bs[i], bs->n, bs->y, bs->x, bs->c);
+
+    float fan_in = (float)(ks->n * ks->y * ks->x);
+    float limit  = sqrtf(6.0f / (fan_in + ks->c));
 
     for (size_t j = 0; j < tensor_size(&n->ks[i]); j++)
-      n->ks[i].buf[j] = (((float)rand() / RAND_MAX) * 2.0f - 1.0f) * limit;
+      ks->buf[j] = (((float)rand() / RAND_MAX) * 2.0f - 1.0f) * limit;
   }
+
+  for (int i = 0; i < 9; i++)
+    n->as[i].n = 1;
 
   return n;
 }
@@ -56,6 +70,8 @@ void network_free(struct Network *n) {
     tensor_free(&n->ks[i]);
     tensor_free(&n->bs[i]);
     tensor_free(&n->as[i]);
+    tensor_free(&n->m_ks[i]);
+    tensor_free(&n->m_bs[i]);
   }
   free(n);
 }
@@ -70,6 +86,7 @@ void network_zero_grad(struct Network *n) {
 
 void network_forward(struct Network *n, struct Tensor *inputs,
                      struct Board *b) {
+  // trunk
   tensor_conv(inputs, &n->ks[0], &n->bs[0], &n->as[0], 1);
   tensor_relu(&n->as[0]);
 
@@ -85,6 +102,7 @@ void network_forward(struct Network *n, struct Tensor *inputs,
   tensor_add(&n->as[2], &n->as[4]);
   tensor_relu(&n->as[4]);
 
+  // policy head
   tensor_conv(&n->as[4], &n->ks[5], &n->bs[5], &n->as[5], 0);
   if (b)
     for (size_t i = 0; i < BOARD_SIZE * BOARD_SIZE; i++)
@@ -92,11 +110,13 @@ void network_forward(struct Network *n, struct Tensor *inputs,
         n->as[5].buf[i] = -FLT_MAX;
   tensor_softmax(&n->as[5]);
 
+  // value head
   tensor_conv(&n->as[4], &n->ks[6], &n->bs[6], &n->as[6], 0);
   tensor_relu(&n->as[6]);
-  tensor_reshape(&n->as[6], 1, BOARD_SIZE * BOARD_SIZE, 1, 1);
+
+  tensor_reshape(&n->as[6], n->as[6].n, 1, 1, BOARD_SIZE * BOARD_SIZE);
   tensor_conv(&n->as[6], &n->ks[7], &n->bs[7], &n->as[7], 0);
-  tensor_reshape(&n->as[6], 1, 1, BOARD_SIZE, BOARD_SIZE);
+  tensor_reshape(&n->as[6], n->as[6].n, BOARD_SIZE, BOARD_SIZE, 1);
 
   tensor_relu(&n->as[7]);
   tensor_conv(&n->as[7], &n->ks[8], &n->bs[8], &n->as[8], 0);
@@ -117,9 +137,10 @@ void network_backward(struct Network *n, struct Tensor *inputs,
   tensor_conv_grad(&n->as[7], &n->ks[8], &n->bs[8], &n->as[8], 0);
   tensor_relu_grad(&n->as[7]);
 
-  tensor_reshape(&n->as[6], 1, BOARD_SIZE * BOARD_SIZE, 1, 1);
+  tensor_reshape(&n->as[6], n->as[6].n, 1, 1, BOARD_SIZE * BOARD_SIZE);
   tensor_conv_grad(&n->as[6], &n->ks[7], &n->bs[7], &n->as[7], 0);
-  tensor_reshape(&n->as[6], 1, 1, BOARD_SIZE, BOARD_SIZE);
+  tensor_reshape(&n->as[6], n->as[6].n, BOARD_SIZE, BOARD_SIZE, 1);
+
   tensor_relu_grad(&n->as[6]);
   tensor_conv_grad(&n->as[4], &n->ks[6], &n->bs[6], &n->as[6], 0);
 
@@ -142,11 +163,16 @@ void network_backward(struct Network *n, struct Tensor *inputs,
 }
 
 void network_sgd(struct Network *n, float alpha) {
+  float m = 0.9f;
   for (size_t i = 0; i < 9; i++) {
-    for (size_t j = 0; j < tensor_size(&n->ks[i]); j++)
-      n->ks[i].buf[j] -= alpha * n->ks[i].grad[j];
-    for (size_t j = 0; j < tensor_size(&n->bs[i]); j++)
-      n->bs[i].buf[j] -= alpha * n->bs[i].grad[j];
+    for (size_t j = 0; j < tensor_size(&n->ks[i]); j++) {
+      n->m_ks[i].buf[j] = m * n->m_ks[i].buf[j] + n->ks[i].grad[j];
+      n->ks[i].buf[j] -= alpha * n->m_ks[i].buf[j];
+    }
+    for (size_t j = 0; j < tensor_size(&n->bs[i]); j++) {
+      n->m_bs[i].buf[j] = m * n->m_bs[i].buf[j] + n->bs[i].grad[j];
+      n->bs[i].buf[j] -= alpha * n->m_bs[i].buf[j];
+    }
   }
 }
 
@@ -172,7 +198,7 @@ void network_load(struct Network *n, const char *path) {
   fclose(f);
 }
 
-void network_benchmark() {
+void network_benchmark(void) {
   printf("Benchmarking (1000 iterations)...\n");
 
   struct Network *n = network_new();
@@ -184,18 +210,9 @@ void network_benchmark() {
     }
   }
 
-  for (size_t i = 0; i < 9; i++) {
-    for (size_t j = 0; j < tensor_size(&n->ks[i]); j++) {
-      n->ks[i].buf[j] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-    }
-    for (size_t j = 0; j < tensor_size(&n->bs[i]); j++) {
-      n->bs[i].buf[j] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-    }
-  }
-
   struct Tensor inputs, loss_p, loss_v;
-  tensor_init(&inputs, 1, 2, BOARD_SIZE, BOARD_SIZE);
-  tensor_init(&loss_p, 1, 1, BOARD_SIZE, BOARD_SIZE);
+  tensor_init(&inputs, 1, BOARD_SIZE, BOARD_SIZE, 2);
+  tensor_init(&loss_p, 1, BOARD_SIZE, BOARD_SIZE, 1);
   tensor_init(&loss_v, 1, 1, 1, 1);
 
   for (size_t i = 0; i < tensor_size(&inputs); i++) {
@@ -206,7 +223,7 @@ void network_benchmark() {
   }
   loss_v.buf[0] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
 
-  for (int i = 0; i < 500; i++) {
+  for (int i = 0; i < 100; i++) {
     network_forward(n, &inputs, b);
     network_backward(n, &inputs, &loss_p, &loss_v);
   }

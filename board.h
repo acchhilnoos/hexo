@@ -21,7 +21,7 @@ struct Board {
   size_t n_empty;
 };
 
-struct Board *board_new();
+struct Board *board_new(void);
 void board_copy(struct Board *src, struct Board *dst);
 
 enum Player get_player(struct Board *b);

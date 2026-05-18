@@ -1,2 +1,4 @@
 main
 weights.bin
+board.o main.o memory.o network.o tensor.o tree.o
+main.dSYM
