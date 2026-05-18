@@ -4,21 +4,20 @@
 #include <stddef.h>
 
 #define tensor_size(t) (t)->n *(t)->c *(t)->y *(t)->x
-#define tensor_at(t, N, C, Y, X)                                               \
-  t->buf[(((N) * t->c + (C)) * t->y + (Y)) * t->x + (X)]
-#define tensor_grad(t, N, C, Y, X)                                             \
-  t->grad[(((N) * t->c + (C)) * t->y + (Y)) * t->x + (X)]
+#define tensor_at(t, N, Y, X, C)                                               \
+  t->buf[(((N) * t->y + (Y)) * t->x + (X)) * t->c + (C)]
+#define tensor_grad(t, N, Y, X, C)                                             \
+  t->grad[(((N) * t->y + (Y)) * t->x + (X)) * t->c + (C)]
 
 struct Tensor {
   float *buf, *grad;
-  // TODO: NHWC with loop order b -> y -> x -> ky -> kx -> ic -> oc
   size_t n, c, y, x;
 };
 
-void tensor_init(struct Tensor *t, size_t n, size_t c, size_t y, size_t x);
+void tensor_init(struct Tensor *t, size_t n, size_t y, size_t x, size_t c);
 void tensor_free(struct Tensor *t);
 
-void tensor_reshape(struct Tensor *t, size_t n, size_t c, size_t y, size_t x);
+void tensor_reshape(struct Tensor *t, size_t n, size_t y, size_t x, size_t c);
 
 void tensor_zero(struct Tensor *t);
 void tensor_zero_grad(struct Tensor *t);

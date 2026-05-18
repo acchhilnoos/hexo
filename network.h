@@ -19,6 +19,9 @@ struct Network {
   struct Tensor ks[9];
   struct Tensor bs[9];
   struct Tensor as[9];
+
+  struct Tensor m_ks[9];
+  struct Tensor m_bs[9];
 };
 
 struct Network *network_new(void);
