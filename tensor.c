@@ -111,7 +111,6 @@ void tensor_conv(struct Tensor *in, struct Tensor *k, struct Tensor *bias,
    * bias:  [1] [1] [1][oc]
    * out:   [b] [y] [x][oc]
    */
-
   // for (b) for (y) for (x)
   for (size_t b = 0; b < in->n; b++) {
     for (size_t y = 0; y < out->y; y++) {
@@ -160,7 +159,6 @@ void tensor_conv_grad(struct Tensor *in, struct Tensor *k, struct Tensor *bias,
    * bias:  [1] [1] [1][oc]
    * out:   [b] [y] [x][oc]
    */
-
   // for (b) for (y) for (x)
   for (size_t b = 0; b < in->n; b++) {
     for (size_t in_y = 0; in_y < in->y; in_y++) {

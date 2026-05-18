@@ -196,7 +196,8 @@ size_t search(struct Tree *t, struct Board *b, struct Network *n, size_t it) {
        * struct Node *c = &vec_at(t->nodes, leaf_idx);
        *
        * play(b_copy, c->move_idx);
-       * v = value(simulate(t, b_copy)); */
+       * v = value(simulate(t, b_copy));
+       */
     }
 
     // propagate absolute values from leaf to root
